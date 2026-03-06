@@ -1,0 +1,24 @@
+cat > scripts/build-and-push.sh <<'EOF'
+#!/bin/bash
+set -e
+
+AWS_ACCOUNT_ID=812045307744
+REGION=us-east-1
+ECR_URL=$AWS_ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+# Login to ECR
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ECR_URL
+
+# Build, tag, push SAST
+docker build -t security-hub-dev-sast ./sast-scanner
+docker tag security-hub-dev-sast:latest $ECR_URL/security-hub-dev-sast:latest
+docker push $ECR_URL/security-hub-dev-sast:latest
+
+# Build, tag, push Pentest
+docker build -t security-hub-dev-pentest ./pentest-scanner
+docker tag security-hub-dev-pentest:latest $ECR_URL/security-hub-dev-pentest:latest
+docker push $ECR_URL/security-hub-dev-pentest:latest
+
+echo "Done! Both images pushed."
+EOF
+chmod +x scripts/build-and-push.sh
