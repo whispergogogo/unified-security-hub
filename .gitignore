@@ -1,2 +1,8 @@
 .terraform/
 .DS_Store
+node_modules/
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+function.zip
+.terraform.tfstate.lock.info
