@@ -1,5 +1,3 @@
-# USH-3: ECR Repositories + Push Base Images
-
 ## Overview
 Two ECR repositories store the Docker images for our ECS Fargate scan tasks:
 - **security-hub-dev-sast** — Static Application Security Testing scanner
