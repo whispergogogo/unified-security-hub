@@ -1,2 +1,15 @@
-.terraform/
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/.terraform.lock.hcl
+
+# macOS
+**/__MACOSX/
+**/._*
 .DS_Store
+
+# Node
+**/node_modules/
+npm-debug.log*
