@@ -1,0 +1,30 @@
+{
+  "family": "security-hub-dev-sast",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::812045307744:role/LabRole",
+  "taskRoleArn": "arn:aws:iam::812045307744:role/LabRole",
+  "containerDefinitions": [
+    {
+      "name": "sast-scanner",
+      "image": "812045307744.dkr.ecr.us-east-1.amazonaws.com/security-hub-dev-sast:latest",
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/security-hub-dev-sast",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "sast"
+        }
+      }
+    }
+  ],
+  "portMappings": [
+  {
+    "containerPort": 3000,
+    "protocol": "tcp"
+  }
+]
+}
