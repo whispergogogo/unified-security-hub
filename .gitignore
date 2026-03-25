@@ -3,7 +3,6 @@
 **/*.tfstate
 **/*.tfstate.*
 **/*.tfplan
-**/.terraform.lock.hcl
 
 # macOS
 **/__MACOSX/
