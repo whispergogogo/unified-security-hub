@@ -1,2 +1,8 @@
 .terraform/
 .DS_Store
+node_modules/
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfstate.*.backup
+function.zip
