@@ -69,3 +69,11 @@ output "api_key_id" {
 output "lambda_function_name" {
   value = module.lambda.lambda_function_name
 }
+
+output "sfn_arn" {
+  value = module.sfn.state_machine_arn
+}
+
+output "sns_topic_arn" {
+  value = module.sfn.sns_topic_arn
+}
