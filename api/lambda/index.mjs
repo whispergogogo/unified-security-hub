@@ -194,6 +194,3 @@ const res = (statusCode, body) => ({
 });
 
 
-DYNAMODB_TABLE = unified-security-hub-findings-dev
-S3_BUCKET      = 
-SFN_ARN        = 
