@@ -3,6 +3,7 @@
 **/*.tfstate
 **/*.tfstate.*
 **/*.tfplan
+**/tfplan
 
 # macOS
 **/__MACOSX/
