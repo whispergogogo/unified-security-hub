@@ -3,6 +3,7 @@
 resource "aws_ecr_repository" "sast" {
   name                 = "${var.project_prefix}-sast"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -17,6 +18,7 @@ resource "aws_ecr_repository" "sast" {
 resource "aws_ecr_repository" "pentest" {
   name                 = "${var.project_prefix}-pentest"
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
