@@ -93,3 +93,24 @@ variable "reports_expiry_days" {
   type        = number
   default     = 90
 }
+
+# ==============================================================
+# Lambda + API Gateway variables (added by Junrui)
+# ==============================================================
+
+variable "sfn_arn" {
+  description = "Step Functions ARN — set to 'placeholder' until Step Functions is created"
+  type        = string
+  default     = "placeholder"
+}
+
+variable "lambda_zip_path" {
+  description = "Path to the Lambda function zip file"
+  type        = string
+  default     = "../api/lambda/function.zip"
+}
+
+variable "lab_role_arn" {
+  description = "Learner Lab IAM role ARN"
+  type        = string
+}

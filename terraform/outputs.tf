@@ -92,3 +92,26 @@ output "frontend_website_url" {
   description = "Frontend website endpoint"
   value       = module.s3.frontend_website_endpoint
 }
+
+output "api_url" {
+  value = module.lambda.api_url
+}
+
+output "api_key_id" {
+  value = module.lambda.api_key_id
+}
+
+output "lambda_function_name" {
+  value = module.lambda.lambda_function_name
+}
+output "api_url" {
+  value = module.lambda.api_url
+}
+
+output "api_key_id" {
+  value = module.lambda.api_key_id
+}
+
+output "lambda_function_name" {
+  value = module.lambda.lambda_function_name
+}

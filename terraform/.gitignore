@@ -1,1 +1,5 @@
 *.zip
+**/*.tfstate
+**/*.tfstate.backup
+**/*.tfstate
+**/*.tfstate.backup
