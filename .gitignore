@@ -16,3 +16,6 @@ npm-debug.log*
 
 # Build artifacts
 function.zip
+
+# example sast test file
+test-sast.js

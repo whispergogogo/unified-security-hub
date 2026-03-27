@@ -189,7 +189,6 @@ unified-security-hub/
 ├── docs/
 │   ├── script.sh              # Build & push all three Docker images to ECR
 │   ├── ecr-setup.md           # ECR setup reference
-├── test-sast.js               # Example sast test file
 ├── testing.md                 # End-to-end testing guide
 └── README.md
 ```
