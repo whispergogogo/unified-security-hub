@@ -17,3 +17,7 @@ output "sast_log_group_name" {
 output "pentest_log_group_name" {
   value = aws_cloudwatch_log_group.pentest.name
 }
+
+output "test_target_log_group_name" {
+  value = aws_cloudwatch_log_group.test_target.name
+}

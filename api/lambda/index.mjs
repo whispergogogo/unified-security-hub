@@ -71,13 +71,14 @@ export const handler = async (event) => {
         result = await dynamo.send(new QueryCommand({
           TableName: TABLE,
           IndexName: "SourceIndex",
-          KeyConditionExpression: "source = :s",
+          KeyConditionExpression: "#src = :s",
+          ExpressionAttributeNames: { "#src": "source" },
           ExpressionAttributeValues: { ":s": { S: source } },
           ScanIndexForward: false, // newest first
         }));
       } else {
         // Query StatusIndex to get all jobs regardless of status
-        const statuses = ["PENDING", "RUNNING", "SUCCESS", "FAILED"];
+        const statuses = ["PENDING", "RUNNING", "COMPLETED", "FAILED"];
         const allItems = [];
         for (const st of statuses) {
           const r = await dynamo.send(new QueryCommand({

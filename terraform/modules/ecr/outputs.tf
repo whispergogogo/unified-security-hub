@@ -13,3 +13,11 @@ output "sast_repo_arn" {
 output "pentest_repo_arn" {
   value = aws_ecr_repository.pentest.arn
 }
+
+output "test_target_repo_url" {
+  value = aws_ecr_repository.test_target.repository_url
+}
+
+output "test_target_repo_arn" {
+  value = aws_ecr_repository.test_target.arn
+}

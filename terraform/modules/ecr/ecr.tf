@@ -29,3 +29,19 @@ resource "aws_ecr_repository" "pentest" {
     Environment = "dev"
   }
 }
+
+# Intentionally vulnerable target API used for pentest integration testing
+resource "aws_ecr_repository" "test_target" {
+  name                 = "${var.project_prefix}-test-target"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = true
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  tags = {
+    Project     = "unified-security-hub"
+    Environment = "dev"
+  }
+}

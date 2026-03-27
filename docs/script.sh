@@ -23,6 +23,17 @@ echo "=== Tagging & pushing Pentest ==="
 docker tag security-hub-dev-pentest:latest ${ECR_BASE}/security-hub-dev-pentest:latest
 docker push ${ECR_BASE}/security-hub-dev-pentest:latest
 
+echo "=== Building Test Target (linux/amd64) ==="
+docker build --platform linux/amd64 \
+  -f ./pentest/backend/Dockerfile.test-target \
+  -t security-hub-dev-test-target:latest \
+  ./pentest/backend/
+
+echo "=== Tagging & pushing Test Target ==="
+docker tag security-hub-dev-test-target:latest ${ECR_BASE}/security-hub-dev-test-target:latest
+docker push ${ECR_BASE}/security-hub-dev-test-target:latest
+
 echo "=== Done! ==="
 echo "  ${ECR_BASE}/security-hub-dev-sast:latest"
 echo "  ${ECR_BASE}/security-hub-dev-pentest:latest"
+echo "  ${ECR_BASE}/security-hub-dev-test-target:latest"

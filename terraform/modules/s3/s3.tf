@@ -10,6 +10,7 @@ locals {
 
 resource "aws_s3_bucket" "artifacts" {
   bucket = "${var.artifacts_bucket_prefix}-${local.account_id}"
+  force_destroy = true  # Allow destroy even when bucket contains objects
 
   tags = {
     Project     = "unified-security-hub"
@@ -55,6 +56,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
 
 resource "aws_s3_bucket" "frontend" {
   bucket = "${var.frontend_bucket_prefix}-${local.account_id}"
+  force_destroy = true  # Allow destroy even when bucket contains objects
 
   tags = {
     Project     = "unified-security-hub"
