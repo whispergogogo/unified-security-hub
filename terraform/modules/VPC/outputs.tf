@@ -57,3 +57,8 @@ output "dynamodb_endpoint_id" {
   description = "ID of the DynamoDB gateway VPC endpoint"
   value       = aws_vpc_endpoint.dynamodb.id
 }
+
+output "fargate_tasks_sg_id" {
+  description = "ID of the Fargate tasks security group"
+  value       = aws_security_group.fargate_tasks.id
+}

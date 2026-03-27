@@ -44,3 +44,11 @@ module "s3" {
   frontend_bucket_prefix  = var.frontend_bucket_prefix
   reports_expiry_days     = var.reports_expiry_days
 }
+
+module "sns" {
+  source = "./modules/sns"
+
+  project_name = var.project_name
+  environment  = var.environment
+  alert_email  = var.alert_email
+}

@@ -24,3 +24,8 @@ log_retention_days = 14
 artifacts_bucket_prefix = "ush-artifacts"
 frontend_bucket_prefix  = "ush-frontend"
 reports_expiry_days     = 90
+
+# ==============================================================
+# SNS
+# ==============================================================
+alert_email = "kaushik.aar@northeastern.edu"

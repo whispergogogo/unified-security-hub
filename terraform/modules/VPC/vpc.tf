@@ -159,3 +159,28 @@ resource "aws_vpc_endpoint" "dynamodb" {
     Name = "${var.project_name}-${var.environment}-dynamodb-endpoint"
   }
 }
+
+###############################################################################
+# Fargate Tasks — Security Group
+# All outbound (S3/DDB via VPC endpoints, internet via NAT). No inbound.
+###############################################################################
+resource "aws_security_group" "fargate_tasks" {
+  name        = "${var.project_name}-${var.environment}-fargate-tasks-sg"
+  description = "Fargate tasks - all outbound, no inbound (tasks not addressable)"
+  vpc_id      = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-fargate-tasks-sg"
+  }
+}
+
+resource "aws_vpc_security_group_egress_rule" "fargate_all_outbound" {
+  security_group_id = aws_security_group.fargate_tasks.id
+  description       = "Allow all outbound traffic"
+  ip_protocol       = "-1"
+  cidr_ipv4         = "0.0.0.0/0"
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-fargate-all-outbound"
+  }
+}

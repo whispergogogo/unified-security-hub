@@ -93,3 +93,12 @@ variable "reports_expiry_days" {
   type        = number
   default     = 90
 }
+
+# ==============================================================
+# SNS variables
+# ==============================================================
+
+variable "alert_email" {
+  description = "Email address for scan completion/failure alerts"
+  type        = string
+}
