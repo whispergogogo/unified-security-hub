@@ -4,8 +4,6 @@
 
 | Resource | Value |
 |---|---|
-| API URL | `https://ys1euam2sb.execute-api.us-east-1.amazonaws.com/dev/scan-jobs` |
-| API Key ID | `50qyvt34qf` |
 | S3 Artifacts Bucket | `ush-artifacts-884298140443` |
 | DynamoDB Table | `unified-security-hub-findings-dev` |
 | ECS Cluster | `unified-security-hub` |
@@ -31,14 +29,14 @@ aws sts get-caller-identity
 
 ### 2. Set shell variables
 ```bash
-API_URL="https://ys1euam2sb.execute-api.us-east-1.amazonaws.com/dev/scan-jobs"
+API_URL="<YOUR-API-URL>"
 
 API_KEY=$(aws apigateway get-api-key \
-  --api-key 50qyvt34qf \
+  --api-key <YOUR-API-KEY-ID> \
   --include-value \
   --query "value" --output text)
 
-echo $API_KEY  # should be a long string, not "50qyvt34qf"
+echo $API_KEY  # should be a long string
 ```
 
 ---
@@ -74,12 +72,11 @@ UPLOAD_URL=$(echo $RESPONSE | python3 -c "import sys,json; print(json.load(sys.s
 
 ### Step 2 — Prepare and upload test file
 ```bash
-echo "const password = 'hardcoded123'; eval(userInput);" > test.js
-zip test.zip test.js
+zip test-sast.zip test-sast.js
 
 curl -X PUT "$UPLOAD_URL" \
   -H "Content-Type: application/zip" \
-  --data-binary @test.zip
+  --data-binary @test-sast.zip
 # No output = success
 ```
 

@@ -128,9 +128,54 @@ resource "aws_sfn_state_machine" "scanner" {
           ExpressionAttributeValues = { ":s" = { S = "COMPLETED" } }
         }
         ResultPath = null
-        Next = "ScanSucceeded"
+        Next = "GetJobResult"
       }
 
+      GetJobResult = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::dynamodb:getItem"
+        Parameters = {
+          TableName = var.dynamodb_table_name
+          Key = {
+            finding_id = { "S.$" = "$.findingId" }
+            timestamp  = { "S.$" = "$.timestamp" }
+          }
+        }
+        ResultSelector = {
+          "severity.$" = "$.Item.severity.S"
+        }
+        ResultPath = "$.jobResult"
+        Next = "CheckSeverity"
+      }
+
+      CheckSeverity = {
+        Type = "Choice"
+        Choices = [
+          {
+            Variable     = "$.jobResult.severity"
+            StringEquals = "CRITICAL"
+            Next         = "SendAlert"
+          },
+          {
+            Variable     = "$.jobResult.severity"
+            StringEquals = "HIGH"
+            Next         = "SendAlert"
+          }
+        ]
+        Default = "ScanSucceeded"
+      }
+
+      SendAlert = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::sns:publish"
+        Parameters = {
+          TopicArn = aws_sns_topic.alerts.arn
+          Message = {
+            "Input.$" = "States.Format('High severity finding detected. ID: {}, Severity: {}', $.findingId, $.jobResult.severity)"
+          }
+        }
+        Next = "ScanSucceeded"
+      }
 
       ScanSucceeded = {
         Type = "Succeed"
