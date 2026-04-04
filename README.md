@@ -215,7 +215,6 @@ unified-security-hub/
 │   └── ecr-setup.md           # ECR setup reference
 ├── testing.md                 # End-to-end testing guide
 ├── frontend-testing.md        # Frontend testing guide
-├── learning/                  # Step-by-step learning notes for this codebase
 └── README.md
 ```
 
