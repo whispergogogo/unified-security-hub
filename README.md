@@ -4,50 +4,73 @@ A serverless AWS security scanning platform integrating SAST and API penetration
 
 ## Team
 
-| Name | GitHub | Role |
-|------|--------|------|
-| Aarushi Kaushik | [@aarushikaushikk](https://github.com/aarushikaushikk) | Data infra (DynamoDB, IAM), ECR, ECS cluster, S3, CloudWatch |
-| Ran Zhao | [@whispergogogo](https://github.com/whispergogogo) | Docker images for SAST & Pentest scanners (Node.js), frontend |
-| Junrui Ding | [@Rae99](https://github.com/Rae99) | Lambda APIs and observability |
+| Name | GitHub |
+|------|--------|
+| Aarushi Kaushik | [@aarushikaushikk](https://github.com/aarushikaushikk) |
+| Ran Zhao | [@whispergogogo](https://github.com/whispergogogo) |
+| Junrui Ding | [@Rae99](https://github.com/Rae99) |
 
 ## Architecture
 
 ```
                     ┌──────────────┐
-                    │   S3 Frontend │
+                    │  S3 Frontend  │
+                    │  (React SPA)  │
                     └──────┬───────┘
                            │
                     ┌──────▼───────┐
                     │  API Gateway  │
+                    │  (API Key)    │
                     └──────┬───────┘
                            │
                     ┌──────▼───────┐
                     │    Lambda     │
-                    └──┬───────┬───┘
-                       │       │
-              ┌────────▼┐  ┌──▼─────────┐
-              │  SAST    │  │  Pentest   │
-              │  (ECS    │  │  (ECS      │
-              │  Fargate)│  │  Fargate)  │
-              └────┬─────┘  └──┬─────────┘
-                   │           │
-            ┌──────▼───────────▼──────┐
-            │       DynamoDB          │
-            │   (Findings Table)      │
-            └─────────────────────────┘
+                    │  createJob    │
+                    │  listJobs     │
+                    │  getJob       │
+                    │  startScan    │
+                    │  getReport    │
+                    └──────┬───────┘
+                           │
+                    ┌──────▼────────┐
+                    │ Step Functions │
+                    │  State Machine │
+                    └──┬─────────┬──┘
+                       │         │
+              ┌────────▼─┐  ┌───▼────────┐
+              │   SAST    │  │  Pentest   │
+              │ (Fargate) │  │ (Fargate)  │
+              │ private   │  │ private    │
+              │ subnet    │  │ subnet     │
+              └────┬──────┘  └──┬─────────┘
+                   │            │
+          ┌────────▼────────────▼──────┐
+          │  S3 Artifacts Bucket       │
+          │  uploads/ + reports/       │
+          │  DynamoDB Findings Table   │
+          └────────────────────────────┘
+
+              ┌─────────────────────┐
+              │  Test Target API    │
+              │  (Fargate, public   │
+              │   subnet, port 4000)│
+              └─────────────────────┘
 ```
 
 ## AWS Services
 
-- **ECS Fargate** — Runs SAST and Pentest scanner containers
-- **ECR** — Stores Docker images (`security-hub-dev-sast`, `security-hub-dev-pentest`)
-- **DynamoDB** — Stores security findings with GSIs for source, severity, and status queries
-- **S3** — Artifacts bucket (scan reports) + frontend bucket (static website)
-- **CloudWatch** — Log groups for scanner containers (14-day retention)
-- **VPC** — Private subnets for Fargate tasks, NAT gateway for outbound access
-- **Step Functions** — Orchestrates scan workflows
-- **SNS** — Email notifications for scan results
-- **API Gateway + Lambda** — Backend API
+| Service | Purpose |
+|---|---|
+| **API Gateway** | Public HTTPS entrypoint with API key authentication |
+| **Lambda** | Request handlers: `createJob`, `listJobs`, `getJob`, `startScan`, `getReport` |
+| **Step Functions** | Scan pipeline orchestration with retries, timeouts, and parallel branching |
+| **ECS Fargate** | Runs SAST, Pentest, and Test-Target containers |
+| **ECR** | Stores Docker images for all three containers |
+| **DynamoDB** | Findings table with GSIs for source, severity, and status queries |
+| **S3** | Artifacts bucket (`uploads/`, `reports/`) + frontend static website |
+| **CloudWatch** | Log groups for all containers (14-day retention) |
+| **VPC** | Private subnets for scanner tasks, public subnet for test-target, NAT gateway |
+| **SNS** | Alerts topic for high-severity scan results |
 
 ## Prerequisites
 
@@ -67,41 +90,46 @@ cd unified-security-hub
 
 ### 2. Set AWS credentials
 
-From Learner Lab → AWS Details, copy and export your credentials:
+From Learner Lab → AWS Details, copy and export:
 
 ```bash
 export AWS_ACCESS_KEY_ID=<your_key>
 export AWS_SECRET_ACCESS_KEY=<your_secret>
 export AWS_SESSION_TOKEN=<your_token>
 export AWS_DEFAULT_REGION=us-east-1
-```
 
-Verify:
-
-```bash
+# Verify
 aws sts get-caller-identity
 ```
 
 > **Note:** Learner Lab credentials expire every ~4 hours. Re-export when they expire.
+> After each Lab session reset, the account ID may change — update `lab_role_arn` in `terraform/terraform.tfvars` before re-applying.
 
-### 3. Provision all infrastructure
+### 3. Package the Lambda function
+
+```bash
+cd api/lambda
+npm install
+zip -r function.zip .
+cd ../..
+```
+
+### 4. Provision all infrastructure
 
 ```bash
 cd terraform
 terraform init
-terraform plan
 terraform apply
 ```
 
-This single command creates everything: VPC, subnets, NAT gateway, DynamoDB table, ECR repos, ECS cluster, CloudWatch log groups, and S3 buckets.
-
-Verify with:
+This creates: VPC, subnets, NAT gateway, DynamoDB, ECR repos, ECS cluster, CloudWatch log groups, S3 buckets, Lambda, API Gateway, and Step Functions state machine.
 
 ```bash
+# View all output values (API URL, bucket names, ARNs, etc.)
 terraform output
 ```
 
-### 4. Build & push Docker images
+### 5. Build & push Docker images
 
 Make sure Docker Desktop is running, then from the repo root:
 
@@ -109,82 +137,144 @@ Make sure Docker Desktop is running, then from the repo root:
 bash docs/script.sh
 ```
 
-This builds Node.js images for both scanners and pushes them to ECR.
-
-Verify:
+This builds three images (`sast`, `pentest`, `test-target`) with `--platform linux/amd64` and pushes them to ECR.
 
 ```bash
-aws ecr list-images --repository-name security-hub-dev-sast --output table
-aws ecr list-images --repository-name security-hub-dev-pentest --output table
+# Verify images were pushed (repo names from terraform output)
+aws ecr list-images --repository-name $(cd terraform && terraform output -raw sast_repo_url | cut -d'/' -f2) --output table
+aws ecr list-images --repository-name $(cd terraform && terraform output -raw pentest_repo_url | cut -d'/' -f2) --output table
+aws ecr list-images --repository-name $(cd terraform && terraform output -raw test_target_repo_url | cut -d'/' -f2) --output table
 ```
 
-### 5. Register ECS task definitions
+### 6. Deploy the frontend
 
 ```bash
-aws ecs register-task-definition --cli-input-json file://infra/task-definition-sast.json
-aws ecs register-task-definition --cli-input-json file://infra/task-definition-pentest.json
+cd frontend
+npm install
+npm run build
 ```
+
+Then upload the `dist/` folder to the S3 frontend bucket:
+
+```bash
+aws s3 sync dist/ s3://$(cd ../terraform && terraform output -raw frontend_bucket_name) --delete
+```
+
+For detailed testing instructions, see [testing.md](testing.md) and [frontend-testing.md](frontend-testing.md).
 
 ## Project Structure
 
 ```
 unified-security-hub/
+├── api/
+│   └── lambda/
+│       ├── index.mjs          # Lambda handler (createJob, listJobs, getJob, startScan, getReport)
+│       └── package.json
 ├── sast/
 │   └── backend/
-│       ├── server.js          # Express server
+│       ├── index.js           # One-shot ECS entry point (download zip → scan → upload report → exit)
+│       ├── server.js          # Express server (local development only)
 │       ├── scanner.js         # SAST scanning logic
 │       ├── package.json
-│       └── Dockerfile         # node:18-alpine based
+│       └── Dockerfile         # node:18-alpine + unzip, CMD: node index.js
 ├── pentest/
 │   └── backend/
-│       ├── server.js          # Express server
+│       ├── index.js           # One-shot ECS entry point (run tests → upload report → exit)
+│       ├── server.js          # Express server (local development only)
 │       ├── tester.js          # Pentest logic
-│       ├── test-target.js     # Test target server
+│       ├── test-target.js     # Intentionally vulnerable target API
 │       ├── package.json
-│       └── Dockerfile         # node:18-alpine + nmap
+│       ├── Dockerfile         # node:18-alpine + nmap, CMD: node index.js
+│       └── Dockerfile.test-target  # node:18-alpine, CMD: node test-target.js, EXPOSE 4000
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx            # Router — /dashboard, /scan/new, /scan/:id
+│   │   ├── main.jsx           # Entry point
+│   │   ├── api/client.js      # API client for Lambda endpoints
+│   │   ├── components/        # Layout, StatusBadge, SeverityBadge
+│   │   └── pages/             # Dashboard, NewScan, ReportDetail
+│   ├── package.json           # React 18, React Router 6, Vite, Tailwind
+│   └── vite.config.js
 ├── terraform/
-│   ├── main.tf                # Root module — calls all child modules
+│   ├── main.tf                # Root module — wires all child modules together
 │   ├── provider.tf            # AWS provider config
 │   ├── variables.tf           # All input variables
 │   ├── outputs.tf             # All outputs
-│   ├── terraform.tfvars       # Default values
+│   ├── terraform.tfvars       # Environment values (lab_role_arn, etc.)
 │   └── modules/
-│       ├── vpc/               # USH-5: VPC, subnets, NAT, endpoints
-│       ├── dynamodb/          # USH-1: Findings table + 3 GSIs
-│       ├── ecr/               # USH-3: SAST + Pentest repos
-│       ├── ecs/               # USH-4: Cluster + log groups
-│       └── s3/                # USH-4: Artifacts + frontend buckets
-├── infra/
-│   ├── task-definition-sast.json
-│   └── task-definition-pentest.json
+│       ├── VPC/               # VPC, subnets, IGW, NAT, route tables, VPC endpoints
+│       ├── dynamodb/          # Findings table + 3 GSIs
+│       ├── ecr/               # SAST, Pentest, Test-Target repos
+│       ├── ecs/               # ECS cluster + CloudWatch log groups
+│       ├── s3/                # Artifacts + frontend buckets
+│       ├── lambda/            # Lambda function + API Gateway + API key
+│       ├── sfn/               # Step Functions state machine + SNS topic
+│       └── tasks/             # ECS task definitions + security groups
 ├── docs/
-│   ├── ecr-setup.md           # ECR setup guide
-│   └── script.sh              # Build & push images script
+│   ├── script.sh              # Build & push all three Docker images to ECR
+│   └── ecr-setup.md           # ECR setup reference
+├── testing.md                 # End-to-end testing guide
+├── frontend-testing.md        # Frontend testing guide
+├── learning/                  # Step-by-step learning notes for this codebase
 └── README.md
 ```
 
 ## Terraform Modules
 
-| Module | Ticket | What it creates |
-|--------|--------|-----------------|
-| `vpc` | USH-5 | VPC, 1 public + 2 private subnets, IGW, NAT, route tables, S3 + DynamoDB VPC endpoints |
-| `dynamodb` | USH-1 | Findings table (PK: `finding_id`, SK: `timestamp`) + SourceIndex, SeverityIndex, StatusIndex GSIs |
-| `ecr` | USH-3 | `security-hub-dev-sast` and `security-hub-dev-pentest` repos with scan-on-push |
-| `ecs` | USH-4 | `unified-security-hub` cluster (Container Insights enabled) + 2 CloudWatch log groups (14-day retention) |
-| `s3` | USH-4 | Artifacts bucket (versioning, public access blocked, 90-day lifecycle on `reports/`) + frontend bucket (static website) |
+| Module | What it creates |
+|--------|-----------------|
+| `VPC` | VPC, 1 public + 2 private subnets, IGW, NAT, route tables, S3 + DynamoDB VPC Gateway endpoints |
+| `dynamodb` | Findings table (`finding_id` PK, `timestamp` SK) + SourceIndex, SeverityIndex, StatusIndex GSIs |
+| `ecr` | `security-hub-dev-sast`, `security-hub-dev-pentest`, `security-hub-dev-test-target` repos |
+| `ecs` | `unified-security-hub` ECS cluster (Container Insights on) + 3 CloudWatch log groups |
+| `s3` | Artifacts bucket (versioning, 90-day lifecycle on `reports/`) + frontend bucket (static website) |
+| `lambda` | Lambda function + REST API Gateway + API key + usage plan |
+| `sfn` | Step Functions state machine + SNS alerts topic |
+| `tasks` | SAST, Pentest, Test-Target task definitions + ECS security groups |
 
-## Scanner Images
+## Container Images
 
-| Scanner | Base Image | Tools | Health Check | Port |
-|---------|-----------|-------|-------------|------|
-| SAST | `node:18-alpine` | Node.js/Express | `GET /health` | 3000 |
-| Pentest | `node:18-alpine` | Node.js/Express, nmap, nmap-scripts | `GET /health` | 3000 |
+| Image | Base | Entry point | Subnet | Notes |
+|---|---|---|---|---|
+| `sast` | `node:18-alpine` | `node index.js` | Private | One-shot: download zip → scan → upload report → exit |
+| `pentest` | `node:18-alpine` + nmap | `node index.js` | Private | One-shot: run tests → upload report → exit |
+| `test-target` | `node:18-alpine` | `node test-target.js` | **Public** | Long-running server, port 4000, intentionally vulnerable |
+
+## Scan Flow
+
+```
+POST /scan-jobs              → Lambda createJob  → DynamoDB (PENDING) + S3 pre-signed upload URL
+PUT  <pre-signed-url>        → S3 upload (SAST only)
+POST /scan-jobs/:id/start    → Lambda startScan  → Step Functions execution starts
+                             → Step Functions → ECS runTask.sync (SAST and/or Pentest in parallel)
+                             → Container runs → writes report to S3 + severity to DynamoDB
+                             → Step Functions → DynamoDB (COMPLETED) → SNS (if HIGH/CRITICAL)
+GET  /scan-jobs/:id          → Lambda getJob     → DynamoDB read
+GET  /scan-jobs/:id/report   → Lambda getReport  → DynamoDB read → S3 fetch → report JSON
+```
+
+## DynamoDB Schema
+
+| Attribute | Type | Description |
+|---|---|---|
+| `finding_id` (PK) | String | UUID — unique job identifier |
+| `timestamp` (SK) | String | ISO-8601 creation time |
+| `source` | String | `SAST` or `PENTEST` |
+| `status` | String | `PENDING` → `RUNNING` → `COMPLETED` / `FAILED` |
+| `severity` | String | `HIGH` / `MEDIUM` / `LOW` / `INFO` — written by container after scan |
+| `userId` | String | API caller identifier |
+| `s3UploadKey` | String | S3 key for uploaded zip (SAST only) |
+| `s3ReportKey` | String | S3 key for result report JSON |
+| `targetUrl` | String | Target URL (Pentest only) |
+| `errorMessage` | String | Error detail if status is `FAILED` |
 
 ## Learner Lab Tips
 
 - **Credentials expire** every ~4 hours — re-export from AWS Details panel
-- **Use LabRole** for all IAM needs — you cannot create custom IAM roles
+- **Account ID may change** after Lab reset — run `aws sts get-caller-identity` and update `lab_role_arn` in `terraform.tfvars` if needed
+- **Use LabRole** for all IAM — custom IAM roles cannot be created
 - **Region:** Always `us-east-1`
-- **Docker:** Use your local Mac with Docker Desktop (Learner Lab terminal doesn't have Docker)
-- **Terraform state:** Don't commit `.tfstate` files — they're in `.gitignore`
-- **Container Insights:** Use `--include SETTINGS` flag with `aws ecs describe-clusters` to see settings
+- **Docker:** Build on your local Mac with Docker Desktop — Learner Lab terminal has no Docker
+- **Apple Silicon:** `docs/script.sh` uses `--platform linux/amd64` — required for ECS Fargate
+- **Terraform state:** `.tfstate` files are gitignored — do not commit them
+- **test-target:** Stop the ECS task after testing to avoid unnecessary charges
