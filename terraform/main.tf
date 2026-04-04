@@ -70,6 +70,11 @@ module "tasks" {
   pentest_log_group = module.ecs.pentest_log_group_name
   vpc_id            = module.vpc.vpc_id
   private_subnet_ids = module.vpc.private_subnet_ids
+  # Test target additions
+  test_target_repo_url  = module.ecr.test_target_repo_url
+  test_target_log_group = module.ecs.test_target_log_group_name
+  public_subnet_id      = module.vpc.public_subnet_id
+  ecs_cluster_id        = module.ecs.cluster_id
 }
 
 module "sfn" {

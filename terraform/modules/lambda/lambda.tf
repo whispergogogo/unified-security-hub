@@ -7,7 +7,7 @@ data "aws_caller_identity" "current" {}
 # ── Lambda Function ───────────────────────────────────────────────────────
 resource "aws_lambda_function" "api" {
   function_name    = "${var.project_name}-api"
-  role = var.lab_role_arn
+  role             = var.lab_role_arn
   handler          = "index.handler"
   runtime          = "nodejs20.x"
   filename         = var.lambda_zip_path
@@ -34,6 +34,7 @@ resource "aws_api_gateway_rest_api" "api" {
   description = "Unified Security Hub REST API"
 }
 
+# ── Resources ─────────────────────────────────────────────────────────────
 # /scan-jobs
 resource "aws_api_gateway_resource" "scan_jobs" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -53,6 +54,13 @@ resource "aws_api_gateway_resource" "scan_job_start" {
   rest_api_id = aws_api_gateway_rest_api.api.id
   parent_id   = aws_api_gateway_resource.scan_job.id
   path_part   = "start"
+}
+
+# /scan-jobs/{findingId}/report
+resource "aws_api_gateway_resource" "scan_job_report" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_resource.scan_job.id
+  path_part   = "report"
 }
 
 # ── Lambda permission ─────────────────────────────────────────────────────
@@ -98,6 +106,23 @@ resource "aws_api_gateway_integration" "get_scan_jobs" {
   uri                     = aws_lambda_function.api.invoke_arn
 }
 
+# ── OPTIONS /scan-jobs (CORS preflight) ───────────────────────────────────
+resource "aws_api_gateway_method" "options_scan_jobs" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.scan_jobs.id
+  http_method      = "OPTIONS"
+  authorization    = "NONE"
+  api_key_required = false
+}
+resource "aws_api_gateway_integration" "options_scan_jobs" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.scan_jobs.id
+  http_method             = aws_api_gateway_method.options_scan_jobs.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api.invoke_arn
+}
+
 # ── GET /scan-jobs/{findingId} ────────────────────────────────────────────
 resource "aws_api_gateway_method" "get_scan_job" {
   rest_api_id      = aws_api_gateway_rest_api.api.id
@@ -110,6 +135,23 @@ resource "aws_api_gateway_integration" "get_scan_job" {
   rest_api_id             = aws_api_gateway_rest_api.api.id
   resource_id             = aws_api_gateway_resource.scan_job.id
   http_method             = aws_api_gateway_method.get_scan_job.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api.invoke_arn
+}
+
+# ── OPTIONS /scan-jobs/{findingId} (CORS preflight) ───────────────────────
+resource "aws_api_gateway_method" "options_scan_job" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.scan_job.id
+  http_method      = "OPTIONS"
+  authorization    = "NONE"
+  api_key_required = false
+}
+resource "aws_api_gateway_integration" "options_scan_job" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.scan_job.id
+  http_method             = aws_api_gateway_method.options_scan_job.http_method
   integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = aws_lambda_function.api.invoke_arn
@@ -132,6 +174,57 @@ resource "aws_api_gateway_integration" "post_start" {
   uri                     = aws_lambda_function.api.invoke_arn
 }
 
+# ── OPTIONS /scan-jobs/{findingId}/start (CORS preflight) ─────────────────
+resource "aws_api_gateway_method" "options_start" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.scan_job_start.id
+  http_method      = "OPTIONS"
+  authorization    = "NONE"
+  api_key_required = false
+}
+resource "aws_api_gateway_integration" "options_start" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.scan_job_start.id
+  http_method             = aws_api_gateway_method.options_start.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api.invoke_arn
+}
+
+# ── GET /scan-jobs/{findingId}/report ─────────────────────────────────────
+resource "aws_api_gateway_method" "get_report" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.scan_job_report.id
+  http_method      = "GET"
+  authorization    = "NONE"
+  api_key_required = true
+}
+resource "aws_api_gateway_integration" "get_report" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.scan_job_report.id
+  http_method             = aws_api_gateway_method.get_report.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api.invoke_arn
+}
+
+# ── OPTIONS /scan-jobs/{findingId}/report (CORS preflight) ────────────────
+resource "aws_api_gateway_method" "options_report" {
+  rest_api_id      = aws_api_gateway_rest_api.api.id
+  resource_id      = aws_api_gateway_resource.scan_job_report.id
+  http_method      = "OPTIONS"
+  authorization    = "NONE"
+  api_key_required = false
+}
+resource "aws_api_gateway_integration" "options_report" {
+  rest_api_id             = aws_api_gateway_rest_api.api.id
+  resource_id             = aws_api_gateway_resource.scan_job_report.id
+  http_method             = aws_api_gateway_method.options_report.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api.invoke_arn
+}
+
 # ── Deployment ────────────────────────────────────────────────────────────
 resource "aws_api_gateway_deployment" "api" {
   rest_api_id = aws_api_gateway_rest_api.api.id
@@ -139,8 +232,13 @@ resource "aws_api_gateway_deployment" "api" {
   depends_on = [
     aws_api_gateway_integration.post_scan_jobs,
     aws_api_gateway_integration.get_scan_jobs,
+    aws_api_gateway_integration.options_scan_jobs,
     aws_api_gateway_integration.get_scan_job,
+    aws_api_gateway_integration.options_scan_job,
     aws_api_gateway_integration.post_start,
+    aws_api_gateway_integration.options_start,
+    aws_api_gateway_integration.get_report,
+    aws_api_gateway_integration.options_report,
   ]
 
   lifecycle {

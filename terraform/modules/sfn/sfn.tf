@@ -72,8 +72,10 @@ resource "aws_sfn_state_machine" "scanner" {
             ]
           }
         }
+        # Store ECS output in $.taskResult — preserves original input fields
+        ResultPath = "$.taskResult"
         Next  = "UpdateStatusCompleted"
-        Catch = [{ ErrorEquals = ["States.ALL"], Next = "ScanFailed" }]
+        Catch = [{ ErrorEquals = ["States.ALL"], Next = "ScanFailed", ResultPath = "$.error" }]
         Retry = [{ ErrorEquals = ["States.ALL"], MaxAttempts = 2, IntervalSeconds = 10 }]
       }
 
@@ -105,8 +107,10 @@ resource "aws_sfn_state_machine" "scanner" {
             ]
           }
         }
+        # Store ECS output in $.taskResult — preserves original input fields
+        ResultPath = "$.taskResult"
         Next  = "UpdateStatusCompleted"
-        Catch = [{ ErrorEquals = ["States.ALL"], Next = "ScanFailed" }]
+        Catch = [{ ErrorEquals = ["States.ALL"], Next = "ScanFailed", ResultPath = "$.error" }]
         Retry = [{ ErrorEquals = ["States.ALL"], MaxAttempts = 2, IntervalSeconds = 10 }]
       }
 
@@ -124,6 +128,23 @@ resource "aws_sfn_state_machine" "scanner" {
           ExpressionAttributeValues = { ":s" = { S = "COMPLETED" } }
         }
         ResultPath = null
+        Next = "GetJobResult"
+      }
+
+      GetJobResult = {
+        Type     = "Task"
+        Resource = "arn:aws:states:::dynamodb:getItem"
+        Parameters = {
+          TableName = var.dynamodb_table_name
+          Key = {
+            finding_id = { "S.$" = "$.findingId" }
+            timestamp  = { "S.$" = "$.timestamp" }
+          }
+        }
+        ResultSelector = {
+          "severity.$" = "$.Item.severity.S"
+        }
+        ResultPath = "$.jobResult"
         Next = "CheckSeverity"
       }
 
@@ -131,12 +152,12 @@ resource "aws_sfn_state_machine" "scanner" {
         Type = "Choice"
         Choices = [
           {
-            Variable     = "$.severity"
+            Variable     = "$.jobResult.severity"
             StringEquals = "CRITICAL"
             Next         = "SendAlert"
           },
           {
-            Variable     = "$.severity"
+            Variable     = "$.jobResult.severity"
             StringEquals = "HIGH"
             Next         = "SendAlert"
           }
@@ -150,7 +171,7 @@ resource "aws_sfn_state_machine" "scanner" {
         Parameters = {
           TopicArn = aws_sns_topic.alerts.arn
           Message = {
-            "Input.$" = "States.Format('High severity finding detected. ID: {}, Severity: {}', $.findingId, $.severity)"
+            "Input.$" = "States.Format('High severity finding detected. ID: {}, Severity: {}', $.findingId, $.jobResult.severity)"
           }
         }
         Next = "ScanSucceeded"

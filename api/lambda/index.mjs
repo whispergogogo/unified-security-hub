@@ -1,5 +1,5 @@
 import { DynamoDBClient, PutItemCommand, GetItemCommand, UpdateItemCommand, QueryCommand } from "@aws-sdk/client-dynamodb";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { SFNClient, StartExecutionCommand } from "@aws-sdk/client-sfn";
 import { randomUUID } from "crypto";
@@ -13,6 +13,10 @@ const BUCKET = process.env.S3_BUCKET;
 const SFN_ARN = process.env.SFN_ARN;
 
 export const handler = async (event) => {
+  // Handle CORS preflight — no API key required
+  if (event.httpMethod === "OPTIONS") {
+    return res(200, {});
+  }
   const method  = event.httpMethod;
   const path    = event.resource;
   const findingId = event.pathParameters?.findingId;
@@ -71,13 +75,14 @@ export const handler = async (event) => {
         result = await dynamo.send(new QueryCommand({
           TableName: TABLE,
           IndexName: "SourceIndex",
-          KeyConditionExpression: "source = :s",
+          KeyConditionExpression: "#src = :s",
+          ExpressionAttributeNames: { "#src": "source" },
           ExpressionAttributeValues: { ":s": { S: source } },
           ScanIndexForward: false, // newest first
         }));
       } else {
         // Query StatusIndex to get all jobs regardless of status
-        const statuses = ["PENDING", "RUNNING", "SUCCESS", "FAILED"];
+        const statuses = ["PENDING", "RUNNING", "COMPLETED", "FAILED"];
         const allItems = [];
         for (const st of statuses) {
           const r = await dynamo.send(new QueryCommand({
@@ -166,6 +171,33 @@ export const handler = async (event) => {
       return res(200, { findingId, status: "RUNNING" });
     }
 
+    // ── GET /scan-jobs/{findingId}/report ── fetch report JSON from S3 ────────
+    if (method === "GET" && path === "/scan-jobs/{findingId}/report") {
+      const result = await dynamo.send(new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: "finding_id = :id",
+        ExpressionAttributeValues: { ":id": { S: findingId } },
+        Limit: 1,
+      }));
+
+      if (!result.Items?.length) return res(404, { error: "Job not found" });
+
+      const s3ReportKey = result.Items[0].s3ReportKey?.S;
+      if (!s3ReportKey) return res(404, { error: "Report not ready yet" });
+
+      // Fetch report JSON directly from S3 and return to frontend
+      const s3Res = await s3.send(new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: s3ReportKey,
+      }));
+      const reportJson = await s3Res.Body.transformToString();
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        body: reportJson,
+      };
+    }
+
     return res(404, { error: "Route not found" });
 
   } catch (err) {
@@ -187,9 +219,15 @@ const formatItem = (item) => ({
   errorMessage:item.errorMessage?.S,
 });
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Headers": "Content-Type,x-api-key",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+};
+
 const res = (statusCode, body) => ({
   statusCode,
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   body: JSON.stringify(body),
 });
 

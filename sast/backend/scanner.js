@@ -15,7 +15,10 @@ const vulnerabilityRules = [
       { regex: /(?:aws[_-]?access[_-]?key[_-]?id)\s*[:=]\s*['"][A-Z0-9]{20}['"]/gi, desc: 'AWS Access Key ID' },
       { regex: /(?:aws[_-]?secret[_-]?access[_-]?key)\s*[:=]\s*['"][A-Za-z0-9/+=]{40}['"]/gi, desc: 'AWS Secret Access Key' },
       { regex: /['"]sk[_-]live[_-][a-zA-Z0-9]{24,}['"]/g, desc: 'Stripe secret key' },
-      { regex: /['"]ghp_[a-zA-Z0-9]{36,}['"]/g, desc: 'GitHub personal access token' }
+      { regex: /['"]ghp_[a-zA-Z0-9]{36,}['"]/g, desc: 'GitHub personal access token' },
+      // Detects hardcoded database connection strings containing credentials
+      // e.g. const dbConnectionString = "mongodb://admin:password123@192.168.1.100:27017/mydb"
+      { regex: /['"](?:mongodb|mysql|postgresql|postgres|mssql|redis):\/\/[^:'"]+:[^@'"]+@/gi, desc: 'Hardcoded database connection string' }
     ],
     message: 'Hardcoded secret detected. Move secrets to environment variables.'
   },
@@ -90,7 +93,13 @@ const vulnerabilityRules = [
       { regex: /query\s*\(\s*['"`]UPDATE.*\+/gi, desc: 'String concatenation in UPDATE query' },
       { regex: /query\s*\(\s*['"`]DELETE.*\+/gi, desc: 'String concatenation in DELETE query' },
       { regex: /execute\s*\(\s*['"`].*\$\{/gi, desc: 'Template literal in SQL execute' },
-      { regex: /query\s*\(\s*`[^`]*\$\{/gi, desc: 'Template literal in SQL query' }
+      { regex: /query\s*\(\s*`[^`]*\$\{/gi, desc: 'Template literal in SQL query' },
+      // Detects SQL built via string concatenation stored in a variable
+      // e.g. const query = "SELECT * FROM users WHERE name = '" + username + "'"
+      { regex: /(?:SELECT|INSERT|UPDATE|DELETE)\s[\s\S]{0,200}['"]\s*\+\s*\w/gi, desc: 'SQL string built with concatenation' },
+      // Detects SQL built via template literal stored in a variable
+      // e.g. const query = `UPDATE users SET name = '${data.name}' WHERE id = ${id}`
+      { regex: /`(?:SELECT|INSERT|UPDATE|DELETE)\s[^`]*\$\{/gi, desc: 'SQL string built with template literal' }
     ],
     message: 'Potential SQL injection vulnerability. Use parameterized queries instead.'
   },
@@ -99,8 +108,11 @@ const vulnerabilityRules = [
     name: 'Hardcoded IP Address',
     severity: 'MEDIUM',
     patterns: [
-      { regex: /['"](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)['"]/g, desc: 'Hardcoded IPv4 address' },
-      { regex: /['"](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d+['"]/g, desc: 'Hardcoded IP with port' }
+      // { regex: /['"](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)['"]/g, desc: 'Hardcoded IPv4 address' },
+      // { regex: /['"](?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):\d+['"]/g, desc: 'Hardcoded IP with port' },
+      // Detects an IPv4 address embedded anywhere inside a string (e.g. in a URL)
+      // e.g. const apiEndpoint = "http://10.0.0.100:8080/api"
+      { regex: /['"][^'"]*\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b[^'"]*['"]/g, desc: 'Hardcoded IPv4 address embedded in string' }
     ],
     message: 'Hardcoded IP address found. Use environment variables or configuration files.'
   },
