@@ -163,15 +163,23 @@ export default function ReportDetail() {
       {/* Download link */}
       {job?.s3ReportKey && (
         <div className="text-right">
-          <a
-            href={`https://${import.meta.env.VITE_ARTIFACTS_BUCKET}.s3.us-east-1.amazonaws.com/${job.s3ReportKey}`}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            onClick={async () => {
+              const data = await getReport(id)
+              if (!data) return
+              const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `report-${id}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
             className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:underline"
           >
             <Download size={13} />
             Download raw JSON
-          </a>
+          </button>
         </div>
       )}
     </div>
