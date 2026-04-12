@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getJob, getReport } from '../api/client'
-import SeverityBadge from '../components/SeverityBadge'
-import StatusBadge from '../components/StatusBadge'
 import { ArrowLeft, ChevronDown, ChevronRight, FileCode, Download } from 'lucide-react'
+import { getJob, getReport } from '../api/client'
+import MetaItem from '../components/MetaItem'
+import SeverityBadge from '../components/SeverityBadge'
+import SeverityChart from '../components/SeverityChart'
+import StatusBadge from '../components/StatusBadge'
+import SummaryPill from '../components/SummaryPill'
 
-const SEVERITY_ORDER = ['HIGH', 'MEDIUM', 'LOW', 'INFO']
+const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
 
 export default function ReportDetail() {
   const { id } = useParams()
@@ -33,14 +36,48 @@ export default function ReportDetail() {
   if (!report)  return <div className="text-sm text-gray-400 py-12 text-center">Report not available.</div>
 
   // Flatten all findings from all files
-  const allFindings = Object.values(report.results ?? {}).flat()
+  const allFindings = report.scanType === 'SAST'
+    ? Object.values(report.results ?? {}).flat()
+    : (report.results ?? [])
 
-  // Group by severity
+  // Group by severity (SAST only)
   const grouped = SEVERITY_ORDER.reduce((acc, sev) => {
     const items = allFindings.filter(f => f.severity === sev)
     if (items.length) acc[sev] = items
     return acc
   }, {})
+
+  // Severity chart data — works for both SAST and Pentest
+  const severityCounts = (() => {
+    if (report.scanType === 'SAST') {
+      return [
+        { label: 'Critical', count: report.summary?.critical ?? 0, color: '#991b1b', bg: '#fecaca' },
+        { label: 'High',     count: report.summary?.high     ?? 0, color: '#dc2626', bg: '#fca5a5' },
+        { label: 'Medium',   count: report.summary?.medium   ?? 0, color: '#ea580c', bg: '#fed7aa' },
+        { label: 'Low',      count: report.summary?.low      ?? 0, color: '#ca8a04', bg: '#fef08a' },
+        { label: 'Info',     count: report.summary?.info     ?? 0, color: '#6b7280', bg: '#e5e7eb' },
+      ]
+    }
+    // Pentest: count failed tests by their severity field
+    const results = report.results ?? []
+    const failedBySev = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 }
+    for (const r of results) {
+      if (r.status === 'FAIL' || r.status === 'WARNING') {
+        const sev = (r.severity ?? 'INFO').toUpperCase()
+        if (sev in failedBySev) failedBySev[sev]++
+      }
+    }
+    return [
+      { label: 'Critical', count: failedBySev.CRITICAL, color: '#991b1b', bg: '#fecaca' },
+      { label: 'High',     count: failedBySev.HIGH,     color: '#dc2626', bg: '#fca5a5' },
+      { label: 'Medium',   count: failedBySev.MEDIUM,   color: '#ea580c', bg: '#fed7aa' },
+      { label: 'Low',      count: failedBySev.LOW,      color: '#ca8a04', bg: '#fef08a' },
+      { label: 'Info',     count: failedBySev.INFO,     color: '#6b7280', bg: '#e5e7eb' },
+    ]
+  })()
+
+  const hasAnySeverity = severityCounts.some(s => s.count > 0)
+  const maxCount = Math.max(...severityCounts.map(s => s.count), 1)
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -73,31 +110,43 @@ export default function ReportDetail() {
           <MetaItem label="Scan type"  value={report.scanType} />
           <MetaItem label="Scanned at" value={new Date(report.scannedAt).toLocaleString()} />
           {report.targetUrl && <MetaItem label="Target" value={report.targetUrl} />}
+          {job?.userId && <MetaItem label="User" value={job.userId} />}
         </div>
       </div>
 
-      {/* Summary bar */}
+      {/* Severity summary chart (SAST) or Pentest summary pills */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-          Summary — {report.summary?.total ?? allFindings.length} findings
+          Summary — {report.summary?.total ?? allFindings.length} {report.scanType === 'SAST' ? 'findings' : 'tests'}
         </h3>
-        <div className="flex gap-3 flex-wrap">
-          {report.scanType === 'SAST' ? (
-            <>
-              <SummaryPill label="High"   count={report.summary?.high}   color="red" />
-              <SummaryPill label="Medium" count={report.summary?.medium} color="orange" />
-              <SummaryPill label="Low"    count={report.summary?.low}    color="yellow" />
-              <SummaryPill label="Info"   count={report.summary?.info}   color="gray" />
-            </>
-          ) : (
-            <>
+
+        {report.scanType === 'SAST' ? (
+          <div className="space-y-4">
+            <div className="flex gap-3 flex-wrap">
+              <SummaryPill label="Critical" count={report.summary?.critical} color="red" />
+              <SummaryPill label="High"     count={report.summary?.high}     color="red" />
+              <SummaryPill label="Medium"   count={report.summary?.medium}   color="orange" />
+              <SummaryPill label="Low"      count={report.summary?.low}      color="yellow" />
+              <SummaryPill label="Info"     count={report.summary?.info}     color="gray" />
+            </div>
+            <SeverityChart data={severityCounts} maxCount={maxCount} />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex gap-3 flex-wrap">
               <SummaryPill label="Failed"  count={report.summary?.failed}  color="red" />
               <SummaryPill label="Warning" count={report.summary?.warned}  color="orange" />
               <SummaryPill label="Passed"  count={report.summary?.passed}  color="green" />
               <SummaryPill label="Errored" count={report.summary?.errored} color="gray" />
-            </>
-          )}
-        </div>
+            </div>
+            {hasAnySeverity && (
+              <>
+                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold pt-2">Failed by severity</p>
+                <SeverityChart data={severityCounts} maxCount={maxCount} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Findings grouped by severity */}
@@ -131,7 +180,7 @@ export default function ReportDetail() {
 
 // ── SAST findings group ───────────────────────────────────────────────────────
 function FindingsGroup({ severity, findings }) {
-  const [open, setOpen] = useState(severity === 'HIGH')
+  const [open, setOpen] = useState(severity === 'CRITICAL' || severity === 'HIGH')
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -159,7 +208,7 @@ function FindingsGroup({ severity, findings }) {
 
 function FindingRow({ finding }) {
   const [expanded, setExpanded] = useState(false)
-  const filename = finding.file.split('/').pop()
+  const filename = (finding.file ?? '').split('/').pop() || 'unknown'
 
   return (
     <div className="px-5 py-3">
@@ -172,10 +221,12 @@ function FindingRow({ finding }) {
           <p className="text-xs text-gray-500 mt-0.5">{finding.description}</p>
         </div>
         <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-          <div className="flex items-center gap-1 text-xs text-gray-400">
-            <FileCode size={12} />
-            {filename}:{finding.line}
-          </div>
+          {finding.line && (
+            <div className="flex items-center gap-1 text-xs text-gray-400">
+              <FileCode size={12} />
+              {filename}:{finding.line}
+            </div>
+          )}
           {expanded
             ? <ChevronDown size={13} className="text-gray-400" />
             : <ChevronRight size={13} className="text-gray-400" />
@@ -185,12 +236,16 @@ function FindingRow({ finding }) {
 
       {expanded && (
         <div className="mt-3 space-y-2">
-          <pre className="bg-gray-900 text-green-400 text-xs rounded-lg px-4 py-3 overflow-x-auto">
-            {finding.evidence}
-          </pre>
-          <p className="text-xs text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
-            💡 {finding.message}
-          </p>
+          {finding.evidence && (
+            <pre className="bg-gray-900 text-green-400 text-xs rounded-lg px-4 py-3 overflow-x-auto">
+              {finding.evidence}
+            </pre>
+          )}
+          {finding.message && (
+            <p className="text-xs text-gray-600 bg-blue-50 px-3 py-2 rounded-lg">
+              💡 {finding.message}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -211,54 +266,51 @@ function PentestResults({ results }) {
   return (
     <div className="space-y-3">
       {results.map(r => (
-        <div key={r.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <p className="text-sm font-medium text-gray-800">{r.name}</p>
-              <p className="text-xs text-gray-500">{r.details}</p>
-            </div>
-            <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${statusColor[r.status] ?? statusColor.ERROR}`}>
-              {r.status}
-            </span>
-          </div>
-          {r.findings?.length > 0 && (
-            <ul className="mt-2 space-y-1">
-              {r.findings.map((f, i) => (
-                <li key={i} className="text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-                  {f.issue}
-                  {f.evidence && <span className="text-gray-400"> — {f.evidence}</span>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <PentestCard key={r.id} result={r} statusColor={statusColor} />
       ))}
     </div>
   )
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function MetaItem({ label, value }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="text-xs text-gray-700 font-medium mt-0.5 break-all">{value}</p>
-    </div>
-  )
-}
+function PentestCard({ result: r, statusColor }) {
+  const [expanded, setExpanded] = useState(r.status === 'FAIL')
 
-function SummaryPill({ label, count, color }) {
-  const colors = {
-    red:    'bg-red-100 text-red-700',
-    orange: 'bg-orange-100 text-orange-700',
-    yellow: 'bg-yellow-100 text-yellow-700',
-    green:  'bg-green-100 text-green-700',
-    gray:   'bg-gray-100 text-gray-600',
-  }
-  if (!count) return null
   return (
-    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${colors[color]}`}>
-      {count} {label}
-    </span>
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div
+        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-800">{r.name}</p>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{r.details}</p>
+        </div>
+        <div className="flex items-center gap-2 ml-4 flex-shrink-0">
+          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full border ${statusColor[r.status] ?? statusColor.ERROR}`}>
+            {r.status}
+          </span>
+          {expanded
+            ? <ChevronDown size={13} className="text-gray-400" />
+            : <ChevronRight size={13} className="text-gray-400" />
+          }
+        </div>
+      </div>
+
+      {expanded && r.findings?.length > 0 && (
+        <div className="px-5 pb-4">
+          <ul className="space-y-1">
+            {r.findings.map((f, i) => (
+              <li key={i} className="text-xs text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+                {f.issue}
+                {f.evidence && <span className="text-gray-400"> — {f.evidence}</span>}
+                {f.recommendation && (
+                  <p className="text-blue-600 mt-0.5">💡 {f.recommendation}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
