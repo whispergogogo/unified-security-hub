@@ -58,6 +58,21 @@ module "lambda" {
   lab_role_arn = var.lab_role_arn
 }
 
+module "cloudwatch" {
+  source = "./modules/cloudwatch"
+
+  project_name         = var.project_name
+  environment          = var.environment
+  aws_region           = var.aws_region
+  sns_topic_arn        = module.sfn.sns_topic_arn
+  state_machine_arn    = module.sfn.state_machine_arn
+  ecs_cluster_name     = module.ecs.cluster_name
+  dynamodb_table_name  = module.dynamodb.table_name
+  lambda_function_name = module.lambda.lambda_function_name
+  sast_log_group       = module.ecs.sast_log_group_name
+  pentest_log_group    = module.ecs.pentest_log_group_name
+}
+
 module "tasks" {
   source = "./modules/tasks"
 

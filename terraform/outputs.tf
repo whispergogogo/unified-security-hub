@@ -89,3 +89,12 @@ output "test_target_task_definition_arn" {
 output "test_target_security_group_id" {
   value = module.tasks.test_target_security_group_id
 }
+
+output "cloudwatch_dashboard_name" {
+  value = module.cloudwatch.dashboard_name
+}
+
+output "failed_scans_alarm_arn" {
+  value = module.cloudwatch.failed_scans_alarm_arn
+}
+
