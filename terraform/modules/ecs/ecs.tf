@@ -33,3 +33,14 @@ resource "aws_cloudwatch_log_group" "pentest" {
     Environment = "dev"
   }
 }
+
+# Log group for the intentionally vulnerable test target API
+resource "aws_cloudwatch_log_group" "test_target" {
+  name              = "/ecs/${var.project_prefix}-test-target"
+  retention_in_days = var.log_retention_days
+
+  tags = {
+    Project     = "unified-security-hub"
+    Environment = "dev"
+  }
+}

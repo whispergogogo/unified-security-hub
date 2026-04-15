@@ -4,18 +4,17 @@ A serverless AWS security scanning platform integrating SAST and API penetration
 
 ## Team
 
-| Name | GitHub |
-|------|--------|
-| Aarushi Kaushik | [@aarushikaushikk](https://github.com/aarushikaushikk) |
-| Ran Zhao | [@whispergogogo](https://github.com/whispergogogo) |
-| Junrui Ding | [@Rae99](https://github.com/Rae99) |
+| Name | GitHub | Role |
+|------|--------|------|
+| Aarushi Kaushik | [@aarushikaushikk](https://github.com/aarushikaushikk) | Data infra (DynamoDB, IAM), ECR, ECS cluster, S3, CloudWatch |
+| Ran Zhao | [@whispergogogo](https://github.com/whispergogogo) | Docker images (SAST, Pentest, Test-Target scanners), frontend |
+| Junrui Ding | [@Rae99](https://github.com/Rae99) | Lambda API handlers, Step Functions, API Gateway |
 
 ## Architecture
 
 ```
                     ┌──────────────┐
                     │  S3 Frontend  │
-                    │  (React SPA)  │
                     └──────┬───────┘
                            │
                     ┌──────▼───────┐
@@ -26,10 +25,9 @@ A serverless AWS security scanning platform integrating SAST and API penetration
                     ┌──────▼───────┐
                     │    Lambda     │
                     │  createJob    │
-                    │  listJobs     │
                     │  getJob       │
+                    │  listJobs     │
                     │  startScan    │
-                    │  getReport    │
                     └──────┬───────┘
                            │
                     ┌──────▼────────┐
@@ -62,8 +60,8 @@ A serverless AWS security scanning platform integrating SAST and API penetration
 | Service | Purpose |
 |---|---|
 | **API Gateway** | Public HTTPS entrypoint with API key authentication |
-| **Lambda** | Request handlers: `createJob`, `listJobs`, `getJob`, `startScan`, `getReport` |
-| **Step Functions** | Scan pipeline orchestration with retries, timeouts, and parallel branching |
+| **Lambda** | Request handlers: `createJob`, `getJob`, `listJobs`, `startScan` |
+| **Step Functions** | Scan pipeline orchestration with retries, timeouts, and branching |
 | **ECS Fargate** | Runs SAST, Pentest, and Test-Target containers |
 | **ECR** | Stores Docker images for all three containers |
 | **DynamoDB** | Findings table with GSIs for source, severity, and status queries |
@@ -134,6 +132,7 @@ terraform output
 Make sure Docker Desktop is running, then from the repo root:
 
 ```bash
+cd ..
 bash docs/script.sh
 ```
 
@@ -146,19 +145,7 @@ aws ecr list-images --repository-name $(cd terraform && terraform output -raw pe
 aws ecr list-images --repository-name $(cd terraform && terraform output -raw test_target_repo_url | cut -d'/' -f2) --output table
 ```
 
-### 6. Deploy the frontend
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-Then upload the `dist/` folder to the S3 frontend bucket:
-
-```bash
-aws s3 sync dist/ s3://$(cd ../terraform && terraform output -raw frontend_bucket_name) --delete
-```
+For detailed testing instructions, see [docs/testing.md](docs/testing.md).
 
 For detailed testing instructions, see [testing.md](testing.md) and [frontend-testing.md](frontend-testing.md).
 
@@ -181,20 +168,11 @@ unified-security-hub/
 │   └── backend/
 │       ├── index.js           # One-shot ECS entry point (run tests → upload report → exit)
 │       ├── server.js          # Express server (local development only)
-│       ├── tester.js          # Pentest logic
-│       ├── test-target.js     # Intentionally vulnerable target API
+│       ├── tester.js          # Pentest logic (provided)
+│       ├── test-target.js     # Intentionally vulnerable target API (provided)
 │       ├── package.json
 │       ├── Dockerfile         # node:18-alpine + nmap, CMD: node index.js
 │       └── Dockerfile.test-target  # node:18-alpine, CMD: node test-target.js, EXPOSE 4000
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx            # Router — /dashboard, /scan/new, /scan/:id
-│   │   ├── main.jsx           # Entry point
-│   │   ├── api/client.js      # API client for Lambda endpoints
-│   │   ├── components/        # Layout, StatusBadge, SeverityBadge
-│   │   └── pages/             # Dashboard, NewScan, ReportDetail
-│   ├── package.json           # React 18, React Router 6, Vite, Tailwind
-│   └── vite.config.js
 ├── terraform/
 │   ├── main.tf                # Root module — wires all child modules together
 │   ├── provider.tf            # AWS provider config
@@ -212,7 +190,7 @@ unified-security-hub/
 │       └── tasks/             # ECS task definitions + security groups
 ├── docs/
 │   ├── script.sh              # Build & push all three Docker images to ECR
-│   └── ecr-setup.md           # ECR setup reference
+│   ├── ecr-setup.md           # ECR setup reference
 ├── testing.md                 # End-to-end testing guide
 ├── frontend-testing.md        # Frontend testing guide
 └── README.md
@@ -242,14 +220,13 @@ unified-security-hub/
 ## Scan Flow
 
 ```
-POST /scan-jobs              → Lambda createJob  → DynamoDB (PENDING) + S3 pre-signed upload URL
-PUT  <pre-signed-url>        → S3 upload (SAST only)
-POST /scan-jobs/:id/start    → Lambda startScan  → Step Functions execution starts
-                             → Step Functions → ECS runTask.sync (SAST and/or Pentest in parallel)
-                             → Container runs → writes report to S3 + severity to DynamoDB
-                             → Step Functions → DynamoDB (COMPLETED) → SNS (if HIGH/CRITICAL)
-GET  /scan-jobs/:id          → Lambda getJob     → DynamoDB read
-GET  /scan-jobs/:id/report   → Lambda getReport  → DynamoDB read → S3 fetch → report JSON
+POST /scan-jobs           → Lambda createJob  → DynamoDB (PENDING) + S3 pre-signed URL
+PUT  <pre-signed-url>     → S3 upload (SAST only)
+POST /scan-jobs/:id/start → Lambda startScan  → Step Functions execution starts
+                          → Step Functions → ECS runTask.sync
+                          → Container runs → writes report to S3 + severity to DynamoDB
+                          → Step Functions → DynamoDB (COMPLETED) → SNS (if HIGH/CRITICAL)
+GET  /scan-jobs/:id       → Lambda getJob    → DynamoDB read
 ```
 
 ## DynamoDB Schema
@@ -260,12 +237,11 @@ GET  /scan-jobs/:id/report   → Lambda getReport  → DynamoDB read → S3 fetc
 | `timestamp` (SK) | String | ISO-8601 creation time |
 | `source` | String | `SAST` or `PENTEST` |
 | `status` | String | `PENDING` → `RUNNING` → `COMPLETED` / `FAILED` |
-| `severity` | String | `HIGH` / `MEDIUM` / `LOW` / `INFO` — written by container after scan |
+| `severity` | String | `HIGH` / `MEDIUM` / `LOW` / `INFO` — written by container |
 | `userId` | String | API caller identifier |
 | `s3UploadKey` | String | S3 key for uploaded zip (SAST only) |
 | `s3ReportKey` | String | S3 key for result report JSON |
 | `targetUrl` | String | Target URL (Pentest only) |
-| `errorMessage` | String | Error detail if status is `FAILED` |
 
 ## Learner Lab Tips
 

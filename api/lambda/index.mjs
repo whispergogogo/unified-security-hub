@@ -229,6 +229,33 @@ export const handler = async (event) => {
       };
     }
 
+    // ── GET /scan-jobs/{findingId}/report ── fetch report JSON from S3 ────────
+    if (method === "GET" && path === "/scan-jobs/{findingId}/report") {
+      const result = await dynamo.send(new QueryCommand({
+        TableName: TABLE,
+        KeyConditionExpression: "finding_id = :id",
+        ExpressionAttributeValues: { ":id": { S: findingId } },
+        Limit: 1,
+      }));
+
+      if (!result.Items?.length) return res(404, { error: "Job not found" });
+
+      const s3ReportKey = result.Items[0].s3ReportKey?.S;
+      if (!s3ReportKey) return res(404, { error: "Report not ready yet" });
+
+      // Fetch report JSON directly from S3 and return to frontend
+      const s3Res = await s3.send(new GetObjectCommand({
+        Bucket: BUCKET,
+        Key: s3ReportKey,
+      }));
+      const reportJson = await s3Res.Body.transformToString();
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        body: reportJson,
+      };
+    }
+
     return res(404, { error: "Route not found" });
 
   } catch (err) {

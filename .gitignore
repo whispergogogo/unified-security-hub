@@ -1,8 +1,26 @@
-.terraform/
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfplan
+**/tfplan
+
+# macOS
+**/__MACOSX/
+**/._*
 .DS_Store
-node_modules/
-*.tfstate
-*.tfstate.backup
-.terraform/
-*.tfstate.*.backup
+
+# Node
+**/node_modules/
+npm-debug.log*
+
+# Build artifacts
 function.zip
+*.zip
+frontend/dist/
+
+# example sast test file
+test-sast.js
+test-sast.zip
+
+frontend/.env

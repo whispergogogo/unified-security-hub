@@ -25,4 +25,4 @@ artifacts_bucket_prefix = "ush-artifacts"
 frontend_bucket_prefix  = "ush-frontend"
 reports_expiry_days     = 90
 
-lab_role_arn = "arn:aws:iam::487732161310:role/LabRole"
+lab_role_arn = "arn:aws:iam::884298140443:role/LabRole"

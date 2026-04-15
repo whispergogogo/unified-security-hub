@@ -77,3 +77,24 @@ output "sfn_arn" {
 output "sns_topic_arn" {
   value = module.sfn.sns_topic_arn
 }
+
+output "test_target_repo_url" {
+  value = module.ecr.test_target_repo_url
+}
+
+output "test_target_task_definition_arn" {
+  value = module.tasks.test_target_task_definition_arn
+}
+
+output "test_target_security_group_id" {
+  value = module.tasks.test_target_security_group_id
+}
+
+output "cloudwatch_dashboard_name" {
+  value = module.cloudwatch.dashboard_name
+}
+
+output "failed_scans_alarm_arn" {
+  value = module.cloudwatch.failed_scans_alarm_arn
+}
+
