@@ -78,6 +78,7 @@ module "tasks" {
 
   project_prefix    = var.project_prefix
   environment       = var.environment
+  aws_region        = var.aws_region
   lab_role_arn      = var.lab_role_arn
   sast_repo_url     = module.ecr.sast_repo_url
   pentest_repo_url  = module.ecr.pentest_repo_url

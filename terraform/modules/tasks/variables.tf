@@ -54,3 +54,9 @@ variable "ecs_cluster_id" {
   description = "ECS cluster ID for running the test-target service"
   type        = string
 }
+
+variable "aws_region" {
+  description = "AWS region for CloudWatch log configuration"
+  type        = string
+  default     = "us-east-1"
+}

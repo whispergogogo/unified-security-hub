@@ -48,6 +48,7 @@ resource "aws_sfn_state_machine" "scanner" {
       RunSASTTask = {
         Type     = "Task"
         Resource = "arn:aws:states:::ecs:runTask.sync"
+        TimeoutSeconds = 600
         Parameters = {
           Cluster        = var.ecs_cluster_arn
           TaskDefinition = var.sast_task_definition_arn
@@ -82,6 +83,7 @@ resource "aws_sfn_state_machine" "scanner" {
       RunPentestTask = {
         Type     = "Task"
         Resource = "arn:aws:states:::ecs:runTask.sync"
+        TimeoutSeconds = 300
         Parameters = {
           Cluster        = var.ecs_cluster_arn
           TaskDefinition = var.pentest_task_definition_arn
@@ -170,9 +172,7 @@ resource "aws_sfn_state_machine" "scanner" {
         Resource = "arn:aws:states:::sns:publish"
         Parameters = {
           TopicArn = aws_sns_topic.alerts.arn
-          Message = {
-            "Input.$" = "States.Format('High severity finding detected. ID: {}, Severity: {}', $.findingId, $.jobResult.severity)"
-          }
+          "Message.$" = "States.Format('High severity finding detected. ID: {}, Severity: {}', $.findingId, $.jobResult.severity)"
         }
         Next = "ScanSucceeded"
       }

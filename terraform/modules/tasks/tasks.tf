@@ -70,7 +70,7 @@ resource "aws_ecs_task_definition" "sast" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = var.sast_log_group
-          "awslogs-region"        = "us-east-1"
+          "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "sast"
         }
       }
@@ -105,7 +105,7 @@ resource "aws_ecs_task_definition" "pentest" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = var.pentest_log_group
-          "awslogs-region"        = "us-east-1"
+          "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "pentest"
         }
       }
@@ -140,7 +140,7 @@ resource "aws_ecs_task_definition" "test_target" {
         logDriver = "awslogs"
         options = {
           "awslogs-group"         = var.test_target_log_group
-          "awslogs-region"        = "us-east-1"
+          "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "test-target"
         }
       }
