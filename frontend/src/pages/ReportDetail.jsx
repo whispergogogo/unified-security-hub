@@ -58,9 +58,12 @@ export default function ReportDetail() {
   const maxCount = Math.max(...severityCounts.map(s => s.count), 1)
 
   // Pentest: separate charts for FAIL and WARNING by severity
+  // report.results is an array for PENTEST but a plain object for SAST,
+  // so guard with Array.isArray before iterating.
   const toBySev = (status) => {
     const bySev = { HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 }
-    for (const r of report.results ?? []) {
+    const resultsArray = Array.isArray(report.results) ? report.results : []
+    for (const r of resultsArray) {
       if (r.status === status) {
         const sev = (r.severity ?? 'INFO').toUpperCase()
         if (sev in bySev) bySev[sev]++
