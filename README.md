@@ -4,8 +4,6 @@ A serverless AWS security scanning platform integrating SAST and API penetration
 
 ## Demo
 
-## Demo
-
 [![Watch the demo video](https://img.youtube.com/vi/nWYw7bRHqcU/maxresdefault.jpg)](https://youtu.be/nWYw7bRHqcU)
 
 ## Team
