@@ -21,10 +21,20 @@ resource "aws_lambda_function" "api" {
       SFN_ARN        = var.sfn_arn
     }
   }
+
+  # Explicitly bind Lambda to the Terraform-managed log group so AWS does not
+  # auto-create a duplicate, and ensure the log group exists before the function.
+  logging_config {
+    log_format = "Text"
+    log_group  = aws_cloudwatch_log_group.api.name
+  }
+
+  depends_on = [aws_cloudwatch_log_group.api]
 }
 
 resource "aws_cloudwatch_log_group" "api" {
-  name              = "/aws/lambda/${aws_lambda_function.api.function_name}"
+  # Use var directly to avoid circular reference with aws_lambda_function.api
+  name              = "/aws/lambda/${var.project_name}-api"
   retention_in_days = 14
 }
 

@@ -98,3 +98,13 @@ output "failed_scans_alarm_arn" {
   value = module.cloudwatch.failed_scans_alarm_arn
 }
 
+output "get_test_target_ip" {
+  description = "Run this to get the current public IP of the test-target ECS task"
+  value       = <<-EOT
+    CLUSTER=${module.ecs.cluster_name}
+    TASK=$(aws ecs list-tasks --cluster $CLUSTER --service-name ${var.project_prefix}-test-target --query 'taskArns[0]' --output text)
+    ENI=$(aws ecs describe-tasks --cluster $CLUSTER --tasks $TASK --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+    PUBLIC_IP=$(aws ec2 describe-network-interfaces --network-interface-ids $ENI --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+  EOT
+}
+

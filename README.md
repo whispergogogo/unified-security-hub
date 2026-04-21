@@ -2,6 +2,12 @@
 
 A serverless AWS security scanning platform integrating SAST and API penetration testing tools. Built for CS6620 Cloud Computing.
 
+## Demo
+
+## Demo
+
+[![Watch the demo video](https://img.youtube.com/vi/nWYw7bRHqcU/maxresdefault.jpg)](https://youtu.be/nWYw7bRHqcU)
+
 ## Team
 
 | Name | GitHub | Role |
@@ -145,7 +151,7 @@ aws ecr list-images --repository-name $(cd terraform && terraform output -raw pe
 aws ecr list-images --repository-name $(cd terraform && terraform output -raw test_target_repo_url | cut -d'/' -f2) --output table
 ```
 
-For detailed testing instructions, see [docs/testing.md](docs/testing.md).
+For detailed testing instructions, see [frontend-testing.md](frontend-testing.md).
 
 ## Project Structure
 

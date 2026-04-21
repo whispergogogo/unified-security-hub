@@ -8,7 +8,7 @@ import SeverityChart from '../components/SeverityChart'
 import StatusBadge from '../components/StatusBadge'
 import SummaryPill from '../components/SummaryPill'
 
-const SEVERITY_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO']
+const SEVERITY_ORDER = ['HIGH', 'MEDIUM', 'LOW', 'INFO']
 
 export default function ReportDetail() {
   const { id } = useParams()
@@ -47,37 +47,38 @@ export default function ReportDetail() {
     return acc
   }, {})
 
-  // Severity chart data — works for both SAST and Pentest
-  const severityCounts = (() => {
-    if (report.scanType === 'SAST') {
-      return [
-        { label: 'Critical', count: report.summary?.critical ?? 0, color: '#991b1b', bg: '#fecaca' },
-        { label: 'High',     count: report.summary?.high     ?? 0, color: '#dc2626', bg: '#fca5a5' },
-        { label: 'Medium',   count: report.summary?.medium   ?? 0, color: '#ea580c', bg: '#fed7aa' },
-        { label: 'Low',      count: report.summary?.low      ?? 0, color: '#ca8a04', bg: '#fef08a' },
-        { label: 'Info',     count: report.summary?.info     ?? 0, color: '#6b7280', bg: '#e5e7eb' },
-      ]
-    }
-    // Pentest: count failed tests by their severity field
-    const results = report.results ?? []
-    const failedBySev = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 }
-    for (const r of results) {
-      if (r.status === 'FAIL' || r.status === 'WARNING') {
+  // Severity chart data for SAST
+  const severityCounts = report.scanType === 'SAST' ? [
+    { label: 'High',   count: report.summary?.high   ?? 0, color: '#dc2626', bg: '#fca5a5' },
+    { label: 'Medium', count: report.summary?.medium ?? 0, color: '#ea580c', bg: '#fed7aa' },
+    { label: 'Low',    count: report.summary?.low    ?? 0, color: '#ca8a04', bg: '#fef08a' },
+    { label: 'Info',   count: report.summary?.info   ?? 0, color: '#6b7280', bg: '#e5e7eb' },
+  ] : []
+
+  const maxCount = Math.max(...severityCounts.map(s => s.count), 1)
+
+  // Pentest: separate charts for FAIL and WARNING by severity
+  // report.results is an array for PENTEST but a plain object for SAST,
+  // so guard with Array.isArray before iterating.
+  const toBySev = (status) => {
+    const bySev = { HIGH: 0, MEDIUM: 0, LOW: 0, INFO: 0 }
+    const resultsArray = Array.isArray(report.results) ? report.results : []
+    for (const r of resultsArray) {
+      if (r.status === status) {
         const sev = (r.severity ?? 'INFO').toUpperCase()
-        if (sev in failedBySev) failedBySev[sev]++
+        if (sev in bySev) bySev[sev]++
       }
     }
     return [
-      { label: 'Critical', count: failedBySev.CRITICAL, color: '#991b1b', bg: '#fecaca' },
-      { label: 'High',     count: failedBySev.HIGH,     color: '#dc2626', bg: '#fca5a5' },
-      { label: 'Medium',   count: failedBySev.MEDIUM,   color: '#ea580c', bg: '#fed7aa' },
-      { label: 'Low',      count: failedBySev.LOW,      color: '#ca8a04', bg: '#fef08a' },
-      { label: 'Info',     count: failedBySev.INFO,     color: '#6b7280', bg: '#e5e7eb' },
+      { label: 'High',   count: bySev.HIGH,   color: '#dc2626', bg: '#fca5a5' },
+      { label: 'Medium', count: bySev.MEDIUM, color: '#ea580c', bg: '#fed7aa' },
+      { label: 'Low',    count: bySev.LOW,    color: '#ca8a04', bg: '#fef08a' },
+      { label: 'Info',   count: bySev.INFO,   color: '#6b7280', bg: '#e5e7eb' },
     ]
-  })()
-
-  const hasAnySeverity = severityCounts.some(s => s.count > 0)
-  const maxCount = Math.max(...severityCounts.map(s => s.count), 1)
+  }
+  const pentestFailedCounts = toBySev('FAIL')
+  const pentestWarnedCounts = toBySev('WARNING')
+  const pentestMaxCount = Math.max(...pentestFailedCounts.map(s => s.count), ...pentestWarnedCounts.map(s => s.count), 1)
 
   return (
     <div className="max-w-3xl space-y-5">
@@ -123,7 +124,6 @@ export default function ReportDetail() {
         {report.scanType === 'SAST' ? (
           <div className="space-y-4">
             <div className="flex gap-3 flex-wrap">
-              <SummaryPill label="Critical" count={report.summary?.critical} color="red" />
               <SummaryPill label="High"     count={report.summary?.high}     color="red" />
               <SummaryPill label="Medium"   count={report.summary?.medium}   color="orange" />
               <SummaryPill label="Low"      count={report.summary?.low}      color="yellow" />
@@ -139,12 +139,10 @@ export default function ReportDetail() {
               <SummaryPill label="Passed"  count={report.summary?.passed}  color="green" />
               <SummaryPill label="Errored" count={report.summary?.errored} color="gray" />
             </div>
-            {hasAnySeverity && (
-              <>
-                <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold pt-2">Failed by severity</p>
-                <SeverityChart data={severityCounts} maxCount={maxCount} />
-              </>
-            )}
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold pt-2">Failed by severity</p>
+            <SeverityChart data={pentestFailedCounts} maxCount={pentestMaxCount} />
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold pt-2">Warned by severity</p>
+            <SeverityChart data={pentestWarnedCounts} maxCount={pentestMaxCount} />
           </div>
         )}
       </div>

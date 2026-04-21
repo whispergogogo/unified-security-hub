@@ -39,6 +39,7 @@ terraform apply
 ### Step 5 — Build & push Docker images
 ```bash
 # From project root
+cd ..
 bash docs/script.sh
 ```
 
@@ -47,7 +48,7 @@ bash docs/script.sh
 
 ### Step 6 — Set frontend environment variables
 ```bash
-cd terracd form
+cd terraform
 
 API_KEY=$(aws apigateway get-api-key \
   --api-key $(terraform output -raw api_key_id) \
@@ -120,29 +121,12 @@ zip test-sast.zip test-sast.js
 
 ### The test-target runs as a persistent ECS Service — no manual run-task needed
 ```bash
-CLUSTER=$(cd terraform && terraform output -raw cluster_name)
-
-TASK_ARN=$(aws ecs list-tasks \
-  --cluster $CLUSTER \
-  --service-name security-hub-dev-test-target \
-  --region us-east-1 \
-  --query "taskArns[0]" \
-  --output text)
-
-sleep 30
-
-ENI_ID=$(aws ecs describe-tasks \
-  --cluster $CLUSTER --tasks $TASK_ARN \
-  --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value" \
-  --output text)
-
-PUBLIC_IP=$(aws ec2 describe-network-interfaces \
-  --network-interface-ids $ENI_ID \
-  --query "NetworkInterfaces[0].Association.PublicIp" \
-  --output text)
-
+# Get the current public IP (run from project root)
+eval "$(cd terraform && terraform output -raw get_test_target_ip)"
 echo "Test-Target URL: http://$PUBLIC_IP:4000"
 ```
+
+> If the IP is empty, the ECS task may still be starting. Wait 30 seconds and retry.
 
 ### Run pentest via frontend
 1. Click **New Scan** → **Pentest** tab
