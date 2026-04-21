@@ -147,21 +147,19 @@ aws ecr list-images --repository-name $(cd terraform && terraform output -raw te
 
 For detailed testing instructions, see [docs/testing.md](docs/testing.md).
 
-For detailed testing instructions, see [testing.md](testing.md) and [frontend-testing.md](frontend-testing.md).
-
 ## Project Structure
 
 ```
 unified-security-hub/
 ├── api/
 │   └── lambda/
-│       ├── index.mjs          # Lambda handler (createJob, listJobs, getJob, startScan, getReport)
+│       ├── index.mjs          # Lambda handler (createJob, getJob, listJobs, startScan)
 │       └── package.json
 ├── sast/
 │   └── backend/
 │       ├── index.js           # One-shot ECS entry point (download zip → scan → upload report → exit)
 │       ├── server.js          # Express server (local development only)
-│       ├── scanner.js         # SAST scanning logic
+│       ├── scanner.js         # SAST scanning logic (provided and revised)
 │       ├── package.json
 │       └── Dockerfile         # node:18-alpine + unzip, CMD: node index.js
 ├── pentest/

@@ -26,7 +26,6 @@ export const handler = async (event) => {
     // ── POST /scan-jobs ── create a new scan job ──────────────────────────
     if (method === "POST" && path === "/scan-jobs") {
       const body = JSON.parse(event.body || "{}");
-      // destructure request body; userId defaults to "default-user" if not provided
       const { scanType, targetUrl, userId = "default-user" } = body;
 
       if (!scanType || !["SAST", "PENTEST"].includes(scanType)) {
@@ -38,7 +37,6 @@ export const handler = async (event) => {
 
       const id           = randomUUID();
       const now          = new Date().toISOString();
-      // SAST jobs need a file upload path; PENTEST jobs don't (no file, just a URL to test)
       const s3UploadKey  = scanType === "SAST" ? `uploads/${id}/source.zip` : null;
 
       await dynamo.send(new PutItemCommand({
@@ -50,8 +48,6 @@ export const handler = async (event) => {
           status:      { S: "PENDING" },    // GSI: StatusIndex
           severity:    { S: "INFO" },       // GSI: SeverityIndex — updated after scan
           userId:      { S: userId },
-          // conditional spread: only add the field if the value exists
-          // DynamoDB rejects null values, so omit the field entirely when not applicable
           ...(s3UploadKey && { s3UploadKey: { S: s3UploadKey } }),
           ...(targetUrl   && { targetUrl:   { S: targetUrl } }),
         }
@@ -96,11 +92,8 @@ export const handler = async (event) => {
             ExpressionAttributeNames: { "#s": "status" },
             ExpressionAttributeValues: { ":s": { S: st } },
           }));
-          // ...(array) spreads array elements as individual push arguments
-          // r.Items || [] guards against undefined if the query returns no results
           allItems.push(...(r.Items || []));
         }
-        // formatItem strips DynamoDB type tags: { S: "PENDING" } → "PENDING"
         return res(200, { jobs: allItems.map(formatItem) });
       }
 
@@ -109,20 +102,18 @@ export const handler = async (event) => {
 
     // ── GET /scan-jobs/{findingId} ── get single job ──────────────────────
     if (method === "GET" && path === "/scan-jobs/{findingId}") {
-      // GetItem requires both PK and SK; we only have PK here, so use Query instead
-      // finding_id is not a reserved word — no #alias needed, unlike "source" or "status"
+      // Need both PK and SK to GetItem — query instead
       const result = await dynamo.send(new QueryCommand({
         TableName: TABLE,
         KeyConditionExpression: "finding_id = :id",
         ExpressionAttributeValues: { ":id": { S: findingId } },
-        Limit: 1,  // each findingId has exactly one record — stop after the first match
+        Limit: 1,
       }));
 
       if (!result.Items || result.Items.length === 0) {
         return res(404, { error: "Job not found" });
       }
 
-      // result.Items is always an array even for a single record — take index [0]
       return res(200, formatItem(result.Items[0]));
     }
 
@@ -140,50 +131,18 @@ export const handler = async (event) => {
       }
 
       const item     = result.Items[0];
-      const source   = item.source?.S;   // "SAST" or "PENTEST"
-      const status   = item.status?.S;   // must be "PENDING" to proceed
-      const ts       = item.timestamp?.S; // needed as SK for the UpdateItem below
+      const source   = item.source?.S;
+      const status   = item.status?.S;
+      const ts       = item.timestamp?.S;
 
       if (status !== "PENDING") {
         return res(400, { error: `Job is already ${status}` });
       }
-      // SAST jobs require a zip to be uploaded before starting
-      // !item.s3UploadKey?.S : ?. safely accesses .S (returns undefined if field missing), ! checks if falsy
       if (source === "SAST" && !item.s3UploadKey?.S) {
         return res(400, { error: "Upload the source zip first" });
       }
 
-      // Start Step Functions FIRST — only update DB if it succeeds
-      // Reversed order prevents status getting stuck as RUNNING if SFN fails to start
-      try {
-        await sfn.send(new StartExecutionCommand({
-          stateMachineArn: SFN_ARN,
-          name:  `scan-${findingId}`,
-          input: JSON.stringify({
-            findingId,
-            scanType:    source,
-            s3UploadKey: item.s3UploadKey?.S ?? null,
-            targetUrl:   item.targetUrl?.S   ?? null,
-            s3Bucket:    BUCKET,
-            timestamp:   ts,
-          }),
-        }));
-      } catch (sfnErr) {
-        // SFN failed — update status to FAILED so the user knows, then surface the error
-        await dynamo.send(new UpdateItemCommand({
-          TableName: TABLE,
-          Key: { finding_id: { S: findingId }, timestamp: { S: ts } },
-          UpdateExpression: "SET #s = :s, errorMessage = :e",
-          ExpressionAttributeNames:  { "#s": "status" },
-          ExpressionAttributeValues: {
-            ":s": { S: "FAILED" },
-            ":e": { S: sfnErr.message },
-          },
-        }));
-        return res(500, { error: "Failed to start scan", detail: sfnErr.message });
-      }
-
-      // SFN started successfully — now safe to mark as RUNNING
+      // Update status → RUNNING
       await dynamo.send(new UpdateItemCommand({
         TableName: TABLE,
         Key: {
@@ -195,38 +154,21 @@ export const handler = async (event) => {
         ExpressionAttributeValues: { ":s": { S: "RUNNING" } },
       }));
 
+      // Start Step Functions execution
+      await sfn.send(new StartExecutionCommand({
+        stateMachineArn: SFN_ARN,
+        name:  `scan-${findingId}`,
+        input: JSON.stringify({
+          findingId,
+          scanType:    source,
+          s3UploadKey: item.s3UploadKey?.S ?? null,
+          targetUrl:   item.targetUrl?.S   ?? null,
+          s3Bucket:    BUCKET,
+          timestamp:   ts,
+        }),
+      }));
+
       return res(200, { findingId, status: "RUNNING" });
-    }
-
-    // ── GET /scan-jobs/{findingId}/report ── fetch report JSON from S3 ────────
-    if (method === "GET" && path === "/scan-jobs/{findingId}/report") {
-      const result = await dynamo.send(new QueryCommand({
-        TableName: TABLE,
-        KeyConditionExpression: "finding_id = :id",
-        ExpressionAttributeValues: { ":id": { S: findingId } },
-        Limit: 1,
-      }));
-
-      // !result.Items?.length : ?. guards against null Items, ! checks length is 0 or falsy
-      // operator precedence: ?. runs first, then !
-      if (!result.Items?.length) return res(404, { error: "Job not found" });
-
-      // s3ReportKey is written by the scanner after it finishes — null means scan not done yet
-      const s3ReportKey = result.Items[0].s3ReportKey?.S;
-      if (!s3ReportKey) return res(404, { error: "Report not ready yet" });
-
-      // fetch the report file from S3 and stream it back to the frontend
-      // S3 Body is a stream (not a string) — transformToString() collects it all into a string
-      const s3Res = await s3.send(new GetObjectCommand({
-        Bucket: BUCKET,
-        Key: s3ReportKey,
-      }));
-      const reportJson = await s3Res.Body.transformToString();
-      return {
-        statusCode: 200,
-        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-        body: reportJson,
-      };
     }
 
     // ── GET /scan-jobs/{findingId}/report ── fetch report JSON from S3 ────────
@@ -288,3 +230,5 @@ const res = (statusCode, body) => ({
   headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   body: JSON.stringify(body),
 });
+
+
