@@ -151,6 +151,8 @@ aws ecr list-images --repository-name $(cd terraform && terraform output -raw te
 
 For detailed testing instructions, see [frontend-testing.md](frontend-testing.md).
 
+For detailed testing instructions, see [testing.md](testing.md) and [frontend-testing.md](frontend-testing.md).
+
 ## Project Structure
 
 ```
